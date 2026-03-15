@@ -1,180 +1,228 @@
-<h1 style="color:red;">TEST 123</h1>
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Mini Royale</title>
+<title>Mini Battle Royale 3D</title>
+
 <style>
-body { margin: 0; overflow: hidden; background: black; }
-canvas { display: block; }
+
+body{
+margin:0;
+overflow:hidden;
+}
+
+#ui{
+position:absolute;
+top:10px;
+left:10px;
+color:white;
+font-size:20px;
+font-family:Arial;
+}
+
+#crosshair{
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+color:white;
+font-size:30px;
+}
+
 </style>
+
 </head>
+
 <body>
 
-<canvas></canvas>
+<div id="ui">
+Health: <span id="hp">100</span>
+</div>
+
+<div id="crosshair">+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/PointerLockControls.js"></script>
 
 <script>
-const canvas = document.querySelector("canvas");
-const ctx = canvas.getContext("2d");
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+let scene = new THREE.Scene()
+scene.background = new THREE.Color(0x87ceeb)
 
-let worldWidth = 3000;
-let worldHeight = 3000;
+let camera = new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,2000)
 
-let keys = {};
-let bullets = [];
-let enemies = [];
-let kills = 0;
-let gameOver = false;
-let mouseDown = false;
-let zoneRadius = 1200;
+let renderer = new THREE.WebGLRenderer()
+renderer.setSize(window.innerWidth,window.innerHeight)
+document.body.appendChild(renderer.domElement)
 
-let player = {
-    x: worldWidth / 2,
-    y: worldHeight / 2,
-    size: 30,
-    speed: 5,
-    hp: 100
-};
+let light = new THREE.DirectionalLight(0xffffff,1)
+light.position.set(50,100,50)
+scene.add(light)
 
-document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
-document.addEventListener("mousedown", () => mouseDown = true);
-document.addEventListener("mouseup", () => mouseDown = false);
+scene.add(new THREE.AmbientLight(0x888888))
 
-let mouseX = 0;
-let mouseY = 0;
+let floorGeo = new THREE.PlaneGeometry(2000,2000)
+let floorMat = new THREE.MeshStandardMaterial({color:0x2e7d32})
+let floor = new THREE.Mesh(floorGeo,floorMat)
+floor.rotation.x = -Math.PI/2
+scene.add(floor)
 
-canvas.addEventListener("mousemove", e => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-});
+let controls = new THREE.PointerLockControls(camera,document.body)
 
-function spawnEnemy() {
-    enemies.push({
-        x: Math.random() * worldWidth,
-        y: Math.random() * worldHeight,
-        size: 30,
-        speed: 1 + Math.random() * 2
-    });
+document.body.addEventListener("click",()=>{
+controls.lock()
+})
+
+let move = {w:false,a:false,s:false,d:false}
+
+document.addEventListener("keydown",e=>{
+if(e.key=="w") move.w=true
+if(e.key=="s") move.s=true
+if(e.key=="a") move.a=true
+if(e.key=="d") move.d=true
+})
+
+document.addEventListener("keyup",e=>{
+if(e.key=="w") move.w=false
+if(e.key=="s") move.s=false
+if(e.key=="a") move.a=false
+if(e.key=="d") move.d=false
+})
+
+let enemies=[]
+
+function spawnEnemy(){
+
+let geo = new THREE.BoxGeometry(2,4,2)
+let mat = new THREE.MeshStandardMaterial({color:"red"})
+let enemy = new THREE.Mesh(geo,mat)
+
+enemy.position.set(
+(Math.random()-0.5)*500,
+2,
+(Math.random()-0.5)*500
+)
+
+scene.add(enemy)
+
+enemies.push(enemy)
+
 }
 
-setInterval(spawnEnemy, 2000);
+for(let i=0;i<10;i++) spawnEnemy()
 
-function shoot() {
-    bullets.push({
-        x: player.x,
-        y: player.y,
-        dx: (mouseX - canvas.width/2) / 15,
-        dy: (mouseY - canvas.height/2) / 15
-    });
+let raycaster = new THREE.Raycaster()
+
+document.addEventListener("click",shoot)
+
+function shoot(){
+
+raycaster.setFromCamera(new THREE.Vector2(0,0),camera)
+
+let hit = raycaster.intersectObjects(enemies)
+
+if(hit.length>0){
+
+let enemy = hit[0].object
+
+scene.remove(enemy)
+
+enemies.splice(enemies.indexOf(enemy),1)
+
+spawnEnemy()
+
 }
 
-function movePlayer() {
-    if (keys["w"]) player.y -= player.speed;
-    if (keys["s"]) player.y += player.speed;
-    if (keys["a"]) player.x -= player.speed;
-    if (keys["d"]) player.x += player.speed;
-
-    player.x = Math.max(0, Math.min(worldWidth, player.x));
-    player.y = Math.max(0, Math.min(worldHeight, player.y));
 }
 
-function updateZone() {
-    zoneRadius -= 0.05;
+let velocity = new THREE.Vector3()
 
-    let dx = player.x - worldWidth/2;
-    let dy = player.y - worldHeight/2;
-    let dist = Math.sqrt(dx*dx + dy*dy);
+let zoneRadius = 400
 
-    if (dist > zoneRadius) {
-        player.hp -= 0.2;
-    }
+function updateMovement(){
+
+let speed = 0.5
+
+velocity.set(0,0,0)
+
+if(move.w) velocity.z -= speed
+if(move.s) velocity.z += speed
+if(move.a) velocity.x -= speed
+if(move.d) velocity.x += speed
+
+controls.moveRight(velocity.x)
+controls.moveForward(velocity.z)
+
 }
 
-function gameLoop() {
-    if (gameOver) return;
+let health = 100
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+function updateEnemies(){
 
-    movePlayer();
-    updateZone();
+enemies.forEach(e=>{
 
-    if (mouseDown) shoot();
+let dx = camera.position.x - e.position.x
+let dz = camera.position.z - e.position.z
 
-    let cameraX = player.x - canvas.width/2;
-    let cameraY = player.y - canvas.height/2;
+e.position.x += dx*0.002
+e.position.z += dz*0.002
 
-    ctx.beginPath();
-    ctx.arc(worldWidth/2 - cameraX, worldHeight/2 - cameraY, zoneRadius, 0, Math.PI*2);
-    ctx.strokeStyle = "purple";
-    ctx.lineWidth = 5;
-    ctx.stroke();
+let dist = Math.sqrt(dx*dx+dz*dz)
 
-    ctx.fillStyle = "blue";
-    ctx.fillRect(player.x - cameraX, player.y - cameraY, player.size, player.size);
+if(dist<3){
 
-    ctx.fillStyle = "yellow";
-    bullets.forEach(b => {
-        b.x += b.dx;
-        b.y += b.dy;
-        ctx.fillRect(b.x - cameraX, b.y - cameraY, 6, 6);
-    });
+health -= 0.1
 
-    enemies.forEach((enemy, eIndex) => {
-        let dx = player.x - enemy.x;
-        let dy = player.y - enemy.y;
-        let dist = Math.sqrt(dx*dx + dy*dy);
+document.getElementById("hp").innerText = Math.floor(health)
 
-        enemy.x += (dx/dist) * enemy.speed;
-        enemy.y += (dy/dist) * enemy.speed;
+if(health<=0){
 
-        ctx.fillStyle = "red";
-        ctx.fillRect(enemy.x - cameraX, enemy.y - cameraY, enemy.size, enemy.size);
+alert("Game Over")
 
-        if (
-            player.x < enemy.x + enemy.size &&
-            player.x + player.size > enemy.x &&
-            player.y < enemy.y + enemy.size &&
-            player.y + player.size > enemy.y
-        ) {
-            player.hp -= 0.5;
-        }
+location.reload()
 
-        bullets.forEach((bullet, bIndex) => {
-            if (
-                bullet.x < enemy.x + enemy.size &&
-                bullet.x + 6 > enemy.x &&
-                bullet.y < enemy.y + enemy.size &&
-                bullet.y + 6 > enemy.y
-            ) {
-                enemies.splice(eIndex, 1);
-                bullets.splice(bIndex, 1);
-                kills++;
-            }
-        });
-    });
-
-    ctx.fillStyle = "white";
-    ctx.fillRect(20, 20, player.hp * 2, 20);
-    ctx.strokeStyle = "white";
-    ctx.strokeRect(20, 20, 200, 20);
-    ctx.fillText("Kills: " + kills, 20, 70);
-
-    if (player.hp <= 0) {
-        gameOver = true;
-        ctx.font = "60px Arial";
-        ctx.fillText("GAME OVER", canvas.width/2 - 200, canvas.height/2);
-    }
-
-    requestAnimationFrame(gameLoop);
 }
 
-gameLoop();
+}
+
+})
+
+}
+
+function updateZone(){
+
+zoneRadius -= 0.01
+
+let dist = Math.sqrt(
+camera.position.x*camera.position.x +
+camera.position.z*camera.position.z
+)
+
+if(dist>zoneRadius){
+
+health -= 0.2
+
+}
+
+}
+
+function animate(){
+
+requestAnimationFrame(animate)
+
+updateMovement()
+
+updateEnemies()
+
+updateZone()
+
+renderer.render(scene,camera)
+
+}
+
+animate()
+
 </script>
 
 </body>
-
 </html>
